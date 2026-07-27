@@ -11,7 +11,10 @@ pub const Template = struct {
         var buffer: [4096]u8 = undefined;
         const bytes = try templates.readFile(io, file_path, &buffer);
 
-        std.debug.print("{s}\n", .{bytes});
+        var scanner: Scanner = .{ .input = bytes };
+        while (scanner.next()) |token| {
+            std.debug.print("Tok.{s} = '{s}'\n", .{ @tagName(token.tag), token.slice });
+        }
 
         return .{};
     }
@@ -37,7 +40,7 @@ pub const Token = struct {
 
 pub const Scanner = struct {
     input: []const u8,
-    index: u64,
+    index: u64 = 0,
 
     const Self = @This();
 
@@ -55,12 +58,49 @@ pub const Scanner = struct {
 
     pub fn next(self: *Self) ?Token {
         const start = self.index;
-        while (self.peek()) |char| {
-            switch (char) {
-                '{' => {},
-                else => {},
-            }
+        switch (self.advance() orelse return null) {
+            '{' => return self.handleControl(start),
+            else => return self.handleOuterText(start),
         }
+    }
+
+    fn handleControl(self: *Self, start: u64) Token {
+        switch (self.advance() orelse unreachable) {
+            '{' => return self.handleStatement(start),
+            '%' => return self.handleExpression(start),
+            '#' => return self.handleComment(start),
+            else => unreachable,
+        }
+    }
+
+    fn handleStatement(_: *Self, _: u64) Token {
+        unreachable;
+    }
+
+    fn handleExpression(_: *Self, _: u64) Token {
+        unreachable;
+    }
+
+    fn handleComment(_: *Self, _: u64) Token {
+        unreachable;
+    }
+
+    fn handleOuterText(self: *Self, start: u64) Token {
+        while (self.peek()) |curr| {
+            if (curr == '{') {
+                return .{
+                    .tag = .text,
+                    .slice = self.input[start..self.index],
+                };
+            }
+
+            _ = self.advance();
+        }
+
+        return .{
+            .tag = .text,
+            .slice = self.input[start..self.index],
+        };
     }
 };
 
